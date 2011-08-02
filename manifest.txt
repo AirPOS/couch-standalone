@@ -1,0 +1,8 @@
+couchbase-server 2.0.0r-96-gd290451 CYGWIN_NT-6.0-i686
+couchdb 88ddba0 CYGWIN_NT-6.0-i686
+geocouch couchbase_1.1_geo-13-g0c84c8d CYGWIN_NT-6.0-i686
+icu4c 2635939 CYGWIN_NT-6.0-i686
+manifest 1.7.0-12-g9318475 CYGWIN_NT-6.0-i686
+otp OTP_R14B02-0-g91b2e57 CYGWIN_NT-6.0-i686
+spidermonkey a3c48c1 CYGWIN_NT-6.0-i686
+tlm 1.7.0-8-gce9a2e8 CYGWIN_NT-6.0-i686

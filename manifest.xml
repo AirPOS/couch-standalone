@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <remote name="apache" fetch="git://github.com/apache/"/>
+  <remote name="couchbase" fetch="git://10.1.1.210/"/>
+  <remote name="erlang" fetch="git://github.com/erlang/"/>
+  <remote name="membase" fetch="git://10.1.1.210/"/>
+
+  <default remote="membase" revision="master"/>
+
+  <project name="couchdb" path="couchdb" revision="88ddba0bf1ce86775c8daf029d0666c50da2eac9"
+           remote="couchbase"/>
+  <project name="geocouch" path="geocouch" revision="0c84c8dbbc9dc6d2de0dc0417ce48a23665d98ed"
+           remote="couchbase"/>
+  <project name="icu4c" path="icu4c" revision="26359393672c378f41f2103a8699c4357c894be7"
+           remote="couchbase"/>
+  <project name="otp" path="otp" revision="91b2e57ea0e3ab794d4b57a12ef10205383525a5"
+           remote="erlang"/>
+  <project name="spidermonkey" path="spidermonkey" revision="a3c48c1736642ea41ee935391d57137d17d297ec"
+           remote="couchbase"/>
+  <project name="tlm" path="tlm" revision="ce9a2e8c8f7092d2ab176350d76a9b59b26da0fc">
+    <copyfile src='Makefile.top' dest='Makefile'/>
+  </project>
+</manifest>

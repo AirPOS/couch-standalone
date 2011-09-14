@@ -1,0 +1,8 @@
+%% -*- erlang -*-
+{"2.10.9",
+ [
+  {"2.10.8", [{restart_application, ssl}]}
+ ],
+ [
+  {"2.10.8", [{restart_application, ssl}]}
+ ]}.

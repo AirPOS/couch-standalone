@@ -1,4 +1,0 @@
-couchdb_couchbase_1.2.0-MINGW32_NT-6.0.i686.tar.gz
-geocouch_couchbase_1.2.0_geo.tar.gz
-pthreads-w64-2-8-0-release.tar.gz
-wallace_1.2.0a-17-g8620362-MINGW32_NT-6.0.i686-201110171420

@@ -1,9 +1,0 @@
-c:/bs/wcs_w64/wallace_couchdb/components/Server/var/log/couchdb/*.log {
-       weekly
-       rotate 10
-       copytruncate
-       delaycompress
-       compress
-       notifempty
-       missingok
-}

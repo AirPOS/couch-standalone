@@ -90,6 +90,24 @@ couchTests.show_documents = function(debug) {
         start({"X-Couch-Test-Header": "Yeah"});
         send("Hey");
       }),
+      "list-api-provides" : stringFun(function(doc, req) {
+        provides("text", function(){
+            send("foo, ");
+            send("bar, ");
+            send("baz!");
+        })
+      }),
+      "list-api-provides-and-return" : stringFun(function(doc, req) {
+        provides("text", function(){
+            send("4, ");
+            send("5, ");
+            send("6, ");
+            return "7!";
+        })
+        send("1, ");
+        send("2, ");
+        return "3, ";
+      }),
       "list-api-mix" : stringFun(function(doc, req) {
         start({"X-Couch-Test-Header": "Yeah"});
         send("Hey ");
@@ -157,6 +175,9 @@ couchTests.show_documents = function(debug) {
       }),
       "withSlash": stringFun(function(doc, req) {
         return { json: doc }
+      }),
+      "secObj": stringFun(function(doc, req) {
+        return { json: req.secObj };
       })
     }
   };
@@ -392,6 +413,14 @@ couchTests.show_documents = function(debug) {
   T(xhr.responseText == "Hey");
   TEquals("Yeah", xhr.getResponseHeader("X-Couch-Test-Header"), "header should be cool");
 
+  // test list() compatible API with provides function
+  xhr = CouchDB.request("GET", "/test_suite_db/_design/template/_show/list-api-provides/foo?format=text");
+  TEquals(xhr.responseText, "foo, bar, baz!", "should join chunks to response body");
+
+  // should keep next result order: chunks + return value + provided chunks + provided return value
+  xhr = CouchDB.request("GET", "/test_suite_db/_design/template/_show/list-api-provides-and-return/foo?format=text");
+  TEquals(xhr.responseText, "1, 2, 3, 4, 5, 6, 7!", "should not break 1..7 range");
+
   xhr = CouchDB.request("GET", "/test_suite_db/_design/template/_show/list-api-mix/foo");
   T(xhr.responseText == "Hey Dude");
   TEquals("Yeah", xhr.getResponseHeader("X-Couch-Test-Header"), "header should be cool");
@@ -410,5 +439,24 @@ couchTests.show_documents = function(debug) {
   db.deleteDoc(doc);
   var xhr = CouchDB.request("GET", "/test_suite_db/_design/template/_show/show-deleted/testdoc");
   TEquals("No doc testdoc", xhr.responseText, "should return 'no doc testdoc'");
+
+
+  run_on_modified_server(
+    [{section: "httpd",
+      key: "authentication_handlers",
+      value: "{couch_httpd_auth, special_test_authentication_handler}"},
+     {section:"httpd",
+      key: "WWW-Authenticate",
+      value:  "X-Couch-Test-Auth"}],
+
+      function() {
+        T(db.setDbProperty("_security", {foo: true}).ok);
+        T(db.save(doc).ok);
+
+        xhr = CouchDB.request("GET", "/test_suite_db/_design/template/_show/secObj");
+        var resp = JSON.parse(xhr.responseText);
+        T(resp.foo == true);
+      }
+  );
   
 };

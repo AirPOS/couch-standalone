@@ -10,14 +10,6 @@
 // License for the specific language governing permissions and limitations under
 // the License.
 
-// Used by replication test
-if (typeof window == 'undefined' || !window) {
-  CouchDB.host = "127.0.0.1:5984";
-  CouchDB.inBrowser = false;
-} else {
-  CouchDB.host = window.location.host;
-  CouchDB.inBrowser = true;
-}
 
 CouchDB.urlPrefix = "..";
 var couchTests = {};
@@ -35,6 +27,7 @@ loadTest("attachments_multipart.js");
 loadTest("attachment_conflicts.js");
 loadTest("attachment_names.js");
 loadTest("attachment_paths.js");
+loadTest("attachment_ranges.js");
 loadTest("attachment_views.js");
 loadTest("auth_cache.js");
 loadTest("batch_save.js");
@@ -52,19 +45,16 @@ loadTest("design_options.js");
 loadTest("design_paths.js");
 loadTest("erlang_views.js");
 loadTest("etags_head.js");
-loadTest("etags_spatial.js");
 loadTest("etags_views.js");
 loadTest("form_submit.js");
 loadTest("http.js");
 loadTest("invalid_docids.js");
 loadTest("jsonp.js");
 loadTest("large_docs.js");
-loadTest("list_spatial.js");
 loadTest("list_views.js");
 loadTest("lots_of_docs.js");
 loadTest("method_override.js");
 loadTest("multiple_rows.js");
-loadTest("multiple_spatial_rows.js");
 loadScript("script/oauth.js");
 loadScript("script/sha1.js");
 loadTest("oauth.js");
@@ -77,12 +67,11 @@ loadTest("reduce_builtin.js");
 loadTest("reduce_false.js");
 loadTest("reduce_false_temp.js");
 loadTest("replication.js");
+loadTest("replicator_db.js");
 loadTest("rev_stemming.js");
 loadTest("rewrite.js");
 loadTest("security_validation.js");
 loadTest("show_documents.js");
-loadTest("spatial.js");
-loadTest("spatial_compaction.js");
 loadTest("stats.js");
 loadTest("update_documents.js");
 loadTest("users_db.js");

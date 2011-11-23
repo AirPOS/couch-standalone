@@ -2,7 +2,7 @@
 
 /*
     http://www.JSON.org/json2.js
-    2009-09-29
+    2010-03-20
 
     Public Domain.
 
@@ -435,6 +435,7 @@ if (!this.JSON) {
 // Unicode characters with escape sequences. JavaScript handles many characters
 // incorrectly, either silently deleting them, or treating them as line endings.
 
+            text = String(text);
             cx.lastIndex = 0;
             if (cx.test(text)) {
                 text = text.replace(cx, function (a) {
@@ -736,7 +737,7 @@ var Mime = (function() {
     Mime.responseContentType = null;  
   };
 
-  function runProvides(req) {
+  function runProvides(req, ddoc) {
     var supportedMimes = [], bestFun, bestKey = null, accept = req.headers["Accept"];
     if (req.query && req.query.format) {
       bestKey = req.query.format;
@@ -767,7 +768,7 @@ var Mime = (function() {
     };
 
     if (bestFun) {
-      return bestFun();
+      return bestFun.call(ddoc);
     } else {
       var supportedTypes = mimeFuns.map(function(mf) {return mimesByKey[mf[0]].join(', ') || mf[0]});
       throw(["error","not_acceptable",
@@ -884,10 +885,10 @@ var Render = (function() {
       resetList();
       Mime.resetProvides();
       var resp = fun.apply(ddoc, args) || {};
+      resp = maybeWrapResponse(resp);
 
       // handle list() style API
       if (chunks.length && chunks.length > 0) {
-        resp = maybeWrapResponse(resp);
         resp.headers = resp.headers || {};
         for(var header in startResp) {
           resp.headers[header] = startResp[header]
@@ -897,8 +898,12 @@ var Render = (function() {
       }
 
       if (Mime.providesUsed) {
-        resp = Mime.runProvides(args[1]);
-        resp = applyContentType(maybeWrapResponse(resp), Mime.responseContentType);
+        var provided_resp = Mime.runProvides(args[1], ddoc) || {};
+        provided_resp = maybeWrapResponse(provided_resp);
+        resp.body = (resp.body || "") + chunks.join("");
+        resp.body += provided_resp.body || "";
+        resp = applyContentType(resp, Mime.responseContentType);
+        resetList();
       }
 
       var type = typeOf(resp);
@@ -951,7 +956,7 @@ var Render = (function() {
       var tail = listFun.apply(ddoc, args);
 
       if (Mime.providesUsed) {
-        tail = Mime.runProvides(req);
+        tail = Mime.runProvides(req, ddoc);
       }    
       if (!gotRow) getRow();
       if (typeof tail != "undefined") {
@@ -1030,6 +1035,7 @@ var State = {
   reset : function(config) {
     // clear the globals and run gc
     State.funs = [];
+    State.lib = null;
     State.query_config = config || {};
     init_sandbox();
     gc();
@@ -1037,7 +1043,11 @@ var State = {
   },
   addFun : function(newFun) {
     // Compile to a function and add it to funs array
-    State.funs.push(Couch.compileFunction(newFun));
+    State.funs.push(Couch.compileFunction(newFun, {views : {lib : State.lib}}));
+    print("true");
+  },
+  addLib : function(lib) {
+    State.lib = lib;
     print("true");
   }
 }
@@ -1074,16 +1084,16 @@ var resolveModule = function(names, mod, root) {
     }
     return resolveModule(names, {
       id : mod.id.slice(0, mod.id.lastIndexOf('/')),
-      parent : mod.parent.parent.parent,
-      current : mod.parent.parent.current
+      parent : mod.parent.parent,
+      current : mod.parent.current
     });
   } else if (n == '.') {
     if (!mod.parent) {
       throw ["error", "invalid_require_path", 'Object has no parent '+JSON.stringify(mod.current)];
     }
     return resolveModule(names, {
-      parent : mod.parent.parent,
-      current : mod.parent.current,
+      parent : mod.parent,
+      current : mod.current,
       id : mod.id
     });
   } else if (root) {
@@ -1109,17 +1119,28 @@ var Couch = {
     try {
       if (sandbox) {
         if (ddoc) {
+          if (!ddoc._module_cache) {
+            ddoc._module_cache = {};
+          }
           var require = function(name, module) {
             module = module || {};
-            var newModule = resolveModule(name.split('/'), module, ddoc);
-            var s = "function (module, exports, require) { " + newModule.current + " }";
-            try {
-              var func = sandbox ? evalcx(s, sandbox) : eval(s);
-              func.apply(sandbox, [newModule, newModule.exports, function(name) {return require(name, newModule)}]);
-            } catch(e) { 
-              throw ["error","compilation_error","Module require('"+name+"') raised error "+e.toSource()]; 
+            var newModule = resolveModule(name.split('/'), module.parent, ddoc);
+            if (!ddoc._module_cache.hasOwnProperty(newModule.id)) {
+              // create empty exports object before executing the module,
+              // stops circular requires from filling the stack
+              ddoc._module_cache[newModule.id] = {};
+              var s = "function (module, exports, require) { " + newModule.current + " }";
+              try {
+                var func = sandbox ? evalcx(s, sandbox) : eval(s);
+                func.apply(sandbox, [newModule, newModule.exports, function(name) {
+                  return require(name, newModule);
+                }]);
+              } catch(e) { 
+                throw ["error","compilation_error","Module require('"+name+"') raised error "+e.toSource()]; 
+              }
+              ddoc._module_cache[newModule.id] = newModule.exports;
             }
-            return newModule.exports;
+            return ddoc._module_cache[newModule.id];
           }
           sandbox.require = require;
         }
@@ -1427,6 +1448,7 @@ var Loop = function() {
     // "view"    : Views.handler,
     "reset"    : State.reset,
     "add_fun"  : State.addFun,
+    "add_lib"  : State.addLib,
     "map_doc"  : Views.mapDoc,
     "reduce"   : Views.reduce,
     "rereduce" : Views.rereduce

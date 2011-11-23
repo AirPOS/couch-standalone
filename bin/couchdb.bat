@@ -22,5 +22,5 @@ rem When using erl instead of werl, server restarts during test runs can fail
 rem intermittently. But using erl should be fine for production use.
 if "%ERL%x" == "x" set ERL=werl.exe
 
-echo CouchDB 1.0.2 - prepare to relax...
+echo CouchDB 1.1.0 - prepare to relax...
 %ERL% -sasl errlog_type error -s couch

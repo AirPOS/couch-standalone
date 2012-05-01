@@ -16,11 +16,15 @@ couchTests.attachments= function(debug) {
   db.createDb();
   if (debug) debugger;
 
+
+  // MD5 Digests of compressible attachments and therefore Etags
+  // will vary depending on platform gzip implementation.
+  // These MIME types are defined in [attachments] compressible_types
   var binAttDoc = {
     _id: "bin_doc",
     _attachments:{
       "foo.txt": {
-        content_type:"text/plain",
+        content_type:"application/octet-stream",
         data: "VGhpcyBpcyBhIGJhc2U2NCBlbmNvZGVkIHRleHQ="
       }
     }
@@ -31,8 +35,8 @@ couchTests.attachments= function(debug) {
 
   var xhr = CouchDB.request("GET", "/test_suite_db/bin_doc/foo.txt");
   T(xhr.responseText == "This is a base64 encoded text");
-  T(xhr.getResponseHeader("Content-Type") == "text/plain");
-  T(xhr.getResponseHeader("Etag") == '"' + save_response.rev + '"');
+  T(xhr.getResponseHeader("Content-Type") == "application/octet-stream");
+  TEquals("\"aEI7pOYCRBLTRQvvqYrrJQ==\"", xhr.getResponseHeader("Etag"));
 
   // empty attachment
   var binAttDoc2 = {
@@ -99,12 +103,21 @@ couchTests.attachments= function(debug) {
   T(xhr.responseText == bin_data);
   TEqualsIgnoreCase("text/plain;charset=utf-8", xhr.getResponseHeader("Content-Type"));
 
+  // without rev
   var xhr = CouchDB.request("PUT", "/test_suite_db/bin_doc3/attachment.txt", {
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body:bin_data
   });
   T(xhr.status == 409);
 
+  // with nonexistent rev
+  var xhr = CouchDB.request("PUT", "/test_suite_db/bin_doc3/attachment.txt"  + "?rev=1-adae8575ecea588919bd08eb020c708e", {
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:bin_data
+  });
+  T(xhr.status == 409);
+
+  // with current rev
   var xhr = CouchDB.request("PUT", "/test_suite_db/bin_doc3/attachment.txt?rev=" + rev, {
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body:bin_data
@@ -272,4 +285,17 @@ couchTests.attachments= function(debug) {
   } catch (e) {
       T(e.error == "missing_stub");
   }
+
+  // test MD5 header
+  var bin_data = "foo bar"
+  var xhr = CouchDB.request("PUT", "/test_suite_db/bin_doc7/attachment.txt", {
+    headers:{"Content-Type":"application/octet-stream",
+             "Content-MD5":"MntvB0NYESObxH4VRDUycw=="},
+    body:bin_data
+  });
+  TEquals(201, xhr.status);
+
+  var xhr = CouchDB.request("GET", "/test_suite_db/bin_doc7/attachment.txt");
+  TEquals('MntvB0NYESObxH4VRDUycw==', xhr.getResponseHeader("Content-MD5"));
+
 };

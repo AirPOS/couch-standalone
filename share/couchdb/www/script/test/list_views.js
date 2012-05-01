@@ -204,6 +204,10 @@ couchTests.list_views = function(debug) {
   T(xhr.status == 200, "standard get should be 200");
   T(/head0123456789tail/.test(xhr.responseText));
 
+  // standard options
+  var xhr = CouchDB.request("OPTIONS", "/test_suite_db/_design/lists/_list/basicBasic/basicView");
+  T(xhr.status == 200, "standard get should be 200");
+  T(/head0123456789tail/.test(xhr.responseText));
 
   // test that etags are available
   var etag = xhr.getResponseHeader("etag");
@@ -248,6 +252,8 @@ couchTests.list_views = function(debug) {
   T(resp.req.headers.Host);
   T(resp.req.headers["User-Agent"]);
   T(resp.req.cookie);
+  TEquals("/test_suite_db/_design/lists/_list/basicJSON/basicView?update_seq=true",
+    resp.req.raw_path, "should include raw path");
 
   // get with query params
   xhr = CouchDB.request("GET", "/test_suite_db/_design/lists/_list/simpleForm/basicView?startkey=3&endkey=8");
@@ -438,8 +444,6 @@ couchTests.list_views = function(debug) {
         T(list[i] + 3 == i);
     }
   };
-
-  
 
   run_on_modified_server([{
     section: "native_query_servers",

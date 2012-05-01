@@ -25,7 +25,7 @@ function $$(node) {
 (function($) {
 
   function Session() {
-    
+
     function doLogin(name, password, callback) {
       $.couch.login({
         name : name,
@@ -40,14 +40,14 @@ function $$(node) {
         }
       });
     };
-    
+
     function doSignup(name, password, callback, runLogin) {
       $.couch.signup({
         name : name
       }, password, {
         success : function() {
           if (runLogin) {
-            doLogin(name, password, callback);            
+            doLogin(name, password, callback);
           } else {
             callback();
           }
@@ -62,7 +62,7 @@ function $$(node) {
         }
       });
     };
-    
+
     function validateUsernameAndPassword(data, callback) {
       if (!data.name || data.name.length == 0) {
         callback({name: "Please enter a name."});
@@ -78,26 +78,28 @@ function $$(node) {
       };
       return true;
     };
-    
+
     function createAdmin() {
       $.showDialog("dialog/_create_admin.html", {
         submit: function(data, callback) {
           if (!validateUsernameAndPassword(data, callback)) return;
           $.couch.config({
             success : function() {
-              doLogin(data.name, data.password, function(errors) {
-                if(!$.isEmptyObject(errors)) {
-                  callback(errors);
-                  return;
-                }
-                doSignup(data.name, null, function(errors) {
-                  if (errors && errors.name && errors.name.indexOf && errors.name.indexOf("taken") == -1) {
+              setTimeout(function() {
+                doLogin(data.name, data.password, function(errors) {
+                  if(!$.isEmptyObject(errors)) {
                     callback(errors);
-                  } else {
-                    callback();
+                    return;
                   }
-                  }, false);
-                });            
+                  doSignup(data.name, null, function(errors) {
+                    if (errors && errors.name && errors.name.indexOf && errors.name.indexOf("taken") == -1) {
+                      callback(errors);
+                    } else {
+                      callback();
+                    }
+                    }, false);
+                  });
+              }, 200);
             }
           }, "admins", data.name, data.password);
         }
@@ -119,6 +121,9 @@ function $$(node) {
       $.couch.logout({
         success : function(resp) {
           $.futon.session.sidebar();
+        },
+        error: function(status, e, reason) {
+          alert('An error occurred logging out: ' + reason);
         }
       })
     };
@@ -134,6 +139,31 @@ function $$(node) {
     };
 
     function changePassword () {
+      var updateUserDoc = function(resp, data) {
+        // regular users get their _users doc updated
+        $.couch.db(resp.info.authentication_db).openDoc("org.couchdb.user:"+resp.userCtx.name, {
+          error: function () {
+            // ignore 404
+            location.reload();
+          },
+          success: function (user) {
+            user.password = data.password;
+            $.couch.db(resp.info.authentication_db).saveDoc(user, {
+              success: function() {
+                doLogin(user.name, user.password, function(errors) {
+                    if(!$.isEmptyObject(errors)) {
+                      callback(errors);
+                      return;
+                    } else {
+                      location.reload();
+                    }
+                  });
+                }
+              });
+            }
+        });
+      }
+
       $.showDialog("dialog/_change_password.html", {
         submit: function(data, callback) {
           if (validatePassword(data, callback)) {
@@ -144,39 +174,41 @@ function $$(node) {
           } else {
             return false;
           }
-          $.couch.session({success: function (resp) {
-            if (resp.userCtx.roles.indexOf("_admin") > -1) {
-              $.couch.config({
-                success : function () {
-                  doLogin(resp.userCtx.name, data.password, function(errors) {
-                    if(!$.isEmptyObject(errors)) {
-                      callback(errors);
-                      return;
-                    } else {
-                      location.reload();
-                    }
-                  });
-                }
-              }, "admins", resp.userCtx.name, data.password);
-            } else {
-              $.couch.db(resp.info.authentication_db).openDoc("org.couchdb.user:"+resp.userCtx.name, {
-                success: function (user) {
-                    $.couch.db(resp.info.authentication_db).saveDoc($.couch.prepareUserDoc(user, data.password), {
-                      success: function() {
-                          doLogin(user.name, data.password, function(errors) {
-                              if(!$.isEmptyObject(errors)) {
-                                callback(errors);
-                                return;
-                              } else {
-                                location.reload();
-                              }
-                            });
-                          }
-                      });
+          $.couch.session({
+            error: function(status, e, reason) {
+              alert('Could not get your session info: ' + reason);
+            },
+            success: function (resp) {
+              // admin users may have a config entry, change the password
+              // there first. Update their user doc later, if it exists
+              if (resp.userCtx.roles.indexOf("_admin") > -1) { // user is admin
+                // check whether we have a config entry
+                $.couch.config({
+                  success : function (response) { // er do have a config entry
+                    $.couch.config({
+                      success : function () {
+                        window.setTimeout(function() {
+                          doLogin(resp.userCtx.name, data.password, function(errors) {
+                            if(!$.isEmptyObject(errors)) {
+                              callback(errors);
+                              return;
+                            } else {
+                              location.reload();
+                            }
+                          });
+                        }, 1000);
+                      },
+                      error: function(status, e, reason) {
+                        callback('Could not persist the new password: ' + reason);
+                      }
+                    }, "admins", resp.userCtx.name, data.password);
                   }
-              });
+                }, "admins", resp.userCtx.name);
+              } else { // non-admin users, update their user doc
+                updateUserDoc(resp, data);
+              }
             }
-          }});
+          });
         }
       });
       return false;
@@ -189,7 +221,7 @@ function $$(node) {
       $("#userCtx .createadmin").click(createAdmin);
       $("#userCtx .changepass").click(changePassword);
     };
-    
+
     this.sidebar = function() {
       // get users db info?
       $("#userCtx span").hide();
@@ -501,6 +533,7 @@ function $$(node) {
   $.futon.storage.declare("recent", {scope: "cookie", defaultValue: ""});
 
   $(function() {
+    document.title = "Apache CouchDB - Futon: " + document.title;
     if ($.futon.storage.get("sidebar") == "hidden") {
       // doing this as early as possible prevents flickering
       $(document.body).addClass("fullwidth");
@@ -526,18 +559,6 @@ function $$(node) {
       $.couch.info({
         success: function(info, status) {
           $("#version").text(info.version);
-          if (info.vendor) {
-            $("#logo").attr('alt', info.vendor.name);
-            var vendorName = $("#vendor_name").text(info.vendor.name);
-            $("#vendor_version").text(info.vendor.version);
-            if (info.vendor.url) {
-              vendorName.attr('href', info.vendor.url);
-            }
-            $("#vendor").show();
-            document.title = info.vendor.name + " - Futon: " + document.title;
-          } else {
-            document.title = "Apache CouchDB - Futon: " + document.title;
-          }
         }
       });
     });

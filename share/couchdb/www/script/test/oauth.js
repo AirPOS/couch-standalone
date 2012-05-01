@@ -22,10 +22,13 @@ couchTests.oauth = function(debug) {
 
   var dbA = new CouchDB("test_suite_db_a", {"X-Couch-Full-Commit":"false"});
   var dbB = new CouchDB("test_suite_db_b", {"X-Couch-Full-Commit":"false"});
+  var dbC = new CouchDB("test_suite_db_c", {"X-Couch-Full-Commit":"false"});
   dbA.deleteDb();
   dbA.createDb();
   dbB.deleteDb();
   dbB.createDb();
+  dbC.deleteDb();
+  dbC.createDb();
 
   // Simple secret key generator
   function generateSecret(length) {
@@ -122,7 +125,6 @@ couchTests.oauth = function(debug) {
         "Authorization": adminBasicAuthHeaderValue()
       });
       usersDb.deleteDb();
-      usersDb.createDb();
         
       // Create a user
       var jasonUserDoc = CouchDB.prepareUserDoc({
@@ -197,6 +199,27 @@ couchTests.oauth = function(debug) {
           });
           T(result.ok);
 
+          // Test if rewriting doesn't break OAuth (c.f. COUCHDB-1321)
+          var dbC = new CouchDB("test_suite_db_c", {
+            "X-Couch-Full-Commit":"false",
+            "Authorization": adminBasicAuthHeaderValue()
+          });
+          var ddocId = "_design/"+ i + consumerKey;
+          var ddoc = {
+            _id: ddocId,
+            language: "javascript",
+            _attachments:{
+              "bar": {
+                content_type:"text/plain",
+                data: "VGhpcyBpcyBhIGJhc2U2NCBlbmNvZGVkIHRleHQ="
+              }
+            },
+            rewrites: [{"from": "foo/:a",  "to": ":a"}]
+          };
+          T(dbC.save(ddoc).ok);
+          xhr = oauthRequest("GET", CouchDB.protocol + host + "/test_suite_db_c/" + ddocId + "/_rewrite/foo/bar", message, accessor);
+          T(xhr.status == expectedCode);
+
           // Test auth via admin user defined in .ini
           var message = {
             parameters: {
@@ -260,7 +283,9 @@ couchTests.oauth = function(debug) {
      {section: "oauth_token_secrets",
       key: "bar", value: admintokenSecret},
      {section: "couch_httpd_oauth",
-      key: "authorization_url", value: authorization_url}
+      key: "authorization_url", value: authorization_url},
+     {section: "couch_httpd_oauth",
+      key: "use_users_db", value: "false"}
     ],
     testFun
   );

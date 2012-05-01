@@ -494,17 +494,39 @@ replace(/(?:^|:|,)(?:\s*\[)+/g, ''))) {
 // License for the specific language governing permissions and limitations under
 // the License.
 
-var Filter = {
-  filter : function(fun, ddoc, args) {    
-    var results = [];
-    var docs = args[0];
-    var req = args[1];
-    for (var i=0; i < docs.length; i++) {
-      results.push((fun.apply(ddoc, [docs[i], req]) && true) || false);
-    };
-    respond([true, results]);
-  }
-};
+var Filter = (function() {
+
+  var view_emit = false;
+
+  return {
+      emit : function(key, value) {
+        view_emit = true;
+      },
+      filter : function(fun, ddoc, args) {
+        var results = [];
+        var docs = args[0];
+        var req = args[1];
+        for (var i=0; i < docs.length; i++) {
+          results.push((fun.apply(ddoc, [docs[i], req]) && true) || false);
+        };
+        respond([true, results]);
+      },
+      filter_view : function(fun, ddoc, args) {
+        // recompile
+        var source = fun.toSource();
+        fun = evalcx(source, filter_sandbox);
+
+        var results = [];
+        var docs = args[0];
+        for (var i=0; i < docs.length; i++) {
+          view_emit = false;
+          fun(docs[i]);
+          results.push((view_emit && true) || false);
+        };
+        respond([true, results]);
+      }
+    }
+})();
 // mimeparse.js
 //
 // This module provides basic functions for handling mime-types. It can
@@ -526,13 +548,13 @@ var Filter = {
 var Mimeparse = (function() {
   // private helpers
   function strip(string) {
-    return string.replace(/^\s+/, '').replace(/\s+$/, '')
+    return string.replace(/^\s+/, '').replace(/\s+$/, '');
   };
 
   function parseRanges(ranges) {
     var parsedRanges = [], rangeParts = ranges.split(",");
     for (var i=0; i < rangeParts.length; i++) {
-      parsedRanges.push(publicMethods.parseMediaRange(rangeParts[i]))
+      parsedRanges.push(publicMethods.parseMediaRange(rangeParts[i]));
     };
     return parsedRanges;
   };
@@ -604,7 +626,7 @@ var Mimeparse = (function() {
         if ((type == targetType || type == "*" || targetType == "*") &&
           (subtype == targetSubtype || subtype == "*" || targetSubtype == "*")) {
           var matchCount = 0;
-          for (param in targetParams) {
+          for (var param in targetParams) {
             if (param != 'q' && params[param] && params[param] == targetParams[param]) {
               matchCount += 1;
             }
@@ -655,12 +677,12 @@ var Mimeparse = (function() {
       var parsedHeader = parseRanges(header);
       var weighted = [];
       for (var i=0; i < supported.length; i++) {
-        weighted.push([publicMethods.fitnessAndQualityParsed(supported[i], parsedHeader), i, supported[i]])
+        weighted.push([publicMethods.fitnessAndQualityParsed(supported[i], parsedHeader), i, supported[i]]);
       };
       weighted.sort();
       return weighted[weighted.length-1][0][1] ? weighted[weighted.length-1][2] : '';
     }
-  }
+  };
   return publicMethods;
 })();
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -770,7 +792,9 @@ var Mime = (function() {
     if (bestFun) {
       return bestFun.call(ddoc);
     } else {
-      var supportedTypes = mimeFuns.map(function(mf) {return mimesByKey[mf[0]].join(', ') || mf[0]});
+      var supportedTypes = mimeFuns.map(function(mf) {
+        return mimesByKey[mf[0]].join(', ') || mf[0];
+      });
       throw(["error","not_acceptable",
         "Content-Type "+(accept||bestKey)+" not supported, try one of: "+supportedTypes.join(', ')]);
     }
@@ -782,7 +806,7 @@ var Mime = (function() {
     provides : provides,
     resetProvides : resetProvides,
     runProvides : runProvides
-  }  
+  };
 })();
 
 
@@ -838,8 +862,7 @@ var Render = (function() {
     } else {
       blowChunks();
     }
-    var line = readline();
-    var json = eval('('+line+')');
+    var json = JSON.parse(readline());
     if (json[0] == "list_end") {
       lastRow = true;
       return null;
@@ -891,7 +914,7 @@ var Render = (function() {
       if (chunks.length && chunks.length > 0) {
         resp.headers = resp.headers || {};
         for(var header in startResp) {
-          resp.headers[header] = startResp[header]
+          resp.headers[header] = startResp[header];
         }
         resp.body = chunks.join("") + (resp.body || "");
         resetList();
@@ -951,8 +974,8 @@ var Render = (function() {
     try {
       Mime.resetProvides();
       resetList();
-      head = args[0]
-      req = args[1]
+      var head = args[0];
+      var req = args[1];
       var tail = listFun.apply(ddoc, args);
 
       if (Mime.providesUsed) {
@@ -1050,7 +1073,7 @@ var State = {
     State.lib = lib;
     print("true");
   }
-}
+};
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not
 // use this file except in compliance with the License. You may obtain a copy of
 // the License at
@@ -1074,7 +1097,7 @@ var resolveModule = function(names, mod, root) {
       parent : mod.parent,
       id : mod.id,
       exports : {}
-    }
+    };
   }
   // we need to traverse the path
   var n = names.shift();
@@ -1099,7 +1122,7 @@ var resolveModule = function(names, mod, root) {
   } else if (root) {
     mod = {current : root};
   }
-  if (!mod.current[n]) {
+  if (mod.current[n] === undefined) {
     throw ["error", "invalid_require_path", 'Object has no property "'+n+'". '+JSON.stringify(mod.current)];
   }
   return resolveModule(names, {
@@ -1116,6 +1139,17 @@ var Couch = {
   },
   compileFunction : function(source, ddoc) {    
     if (!source) throw(["error","not_found","missing function"]);
+
+    var evaluate_function_source = function(source, evalFunction, sandbox) {
+      sandbox = sandbox || {};
+      if(typeof CoffeeScript === "undefined") {
+        return evalFunction(source, sandbox);
+      } else {
+        var coffee = CoffeeScript.compile(source, {bare: true});
+        return evalFunction(coffee, sandbox);
+      }
+    }
+
     try {
       if (sandbox) {
         if (ddoc) {
@@ -1141,12 +1175,12 @@ var Couch = {
               ddoc._module_cache[newModule.id] = newModule.exports;
             }
             return ddoc._module_cache[newModule.id];
-          }
+          };
           sandbox.require = require;
         }
-        var functionObject = evalcx(source, sandbox);
+        var functionObject = evaluate_function_source(source, evalcx, sandbox);
       } else {
-        var functionObject = eval(source);
+        var functionObject = evaluate_function_source(source, eval);
       }
     } catch (err) {
       throw(["error", "compilation_error", err.toSource() + " (" + source + ")"]);
@@ -1172,7 +1206,7 @@ var Couch = {
       }
     }
   }
-}
+};
 
 // prints the object as JSON, and rescues and logs any toJSON() related errors
 function respond(obj) {
@@ -1343,7 +1377,7 @@ var Views = (function() {
       }
       print("[" + buf.join(", ") + "]");
     }
-  }
+  };
 })();
 // Licensed under the Apache License, Version 2.0 (the "License"); you may not
 // use this file except in compliance with the License. You may obtain a copy of
@@ -1358,6 +1392,7 @@ var Views = (function() {
 // the License.
 
 var sandbox = null;
+var filter_sandbox = null;
 
 function init_sandbox() {
   try {
@@ -1375,10 +1410,26 @@ function init_sandbox() {
     sandbox.getRow = Render.getRow;
     sandbox.isArray = isArray;
   } catch (e) {
-    log(e.toSource());
+    //log(e.toSource());
   }
 };
 init_sandbox();
+
+function init_filter_sandbox() {
+  try {
+    filter_sandbox = evalcx('');
+    for (var p in sandbox) {
+      if (sandbox.hasOwnProperty(p)) {
+        filter_sandbox[p] = sandbox[p];
+      }
+    }
+    filter_sandbox.emit = Filter.emit;
+  } catch(e) {
+    log(e.toSource());
+  }
+};
+
+init_filter_sandbox();
 
 // Commands are in the form of json arrays:
 // ["commandname",..optional args...]\n
@@ -1390,6 +1441,7 @@ var DDoc = (function() {
     "lists"     : Render.list,
     "shows"    : Render.show,
     "filters"   : Filter.filter,
+    "views"     : Filter.filter_view, 
     "updates"  : Render.update,
     "validate_doc_update" : Validate.validate
   };
@@ -1420,14 +1472,19 @@ var DDoc = (function() {
           var point = ddoc;
           for (var i=0; i < funPath.length; i++) {
             if (i+1 == funPath.length) {
-              fun = point[funPath[i]]
+              var fun = point[funPath[i]];
+              if (!fun) {
+                throw(["error","not_found",
+                       "missing " + funPath[0] + " function " + funPath[i] +
+                       " on design doc " + ddocId]);
+              }
               if (typeof fun != "function") {
                 fun = Couch.compileFunction(fun, ddoc);
                 // cache the compiled fun on the ddoc
-                point[funPath[i]] = fun
+                point[funPath[i]] = fun;
               };
             } else {
-              point = point[funPath[i]]              
+              point = point[funPath[i]];
             }
           };
 
@@ -1469,7 +1526,7 @@ var Loop = function() {
     }
   };
   while (line = readline()) {
-    cmd = eval('('+line+')');
+    cmd = JSON.parse(line);
     State.line_length = line.length;
     try {
       cmdkey = cmd.shift();
